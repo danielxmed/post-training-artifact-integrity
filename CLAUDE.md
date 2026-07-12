@@ -75,3 +75,10 @@ Python 3.12 + [uv](https://docs.astral.sh/uv/). `uv.lock` is committed; CI insta
 - Format: `uv run ruff format .` (CI checks with `--check`)
 - Typecheck: `uv run mypy` (targets configured in `pyproject.toml`)
 - Git hooks (optional): `uv run pre-commit install`; run manually with `uv run pre-commit run --all-files`
+- Quickstart smoke: `uv run python scripts/quickstart.py 0` (generates a task, runs the oracle, prints the reward/constraint record)
+- Determinism check: `uv run python scripts/determinism_check.py --seeds 0:150 --out -` (CI runs it twice under different `PYTHONHASHSEED` values and byte-diffs)
+- Regenerate golden traces: `uv run python scripts/regenerate_golden.py`
+
+Test markers: `property`, `replay`, `acceptance`, `slow`. The default CI test job runs `-m "not replay and not acceptance and not slow"`; a separate job runs `-m "replay or acceptance"`; the go/no-go's 1000-seed sweep is `slow`.
+
+**`ENV_VERSION` bump rule:** `src/ptaie/version.py` is part of replay identity. Any change to environment semantics (task generation, transitions, verification, reward/constraint computation, canonical serialization) requires bumping `ENV_VERSION`. A diff to the committed golden traces (`tests/fixtures/golden_traces/`) is the signal — regenerate them only alongside a bump, with justification in the PR. See `docs/determinism.md`.

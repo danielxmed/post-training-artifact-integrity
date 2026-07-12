@@ -15,6 +15,7 @@ defect's ``prohibited_side_effects`` (e.g. truncation forbids fabricated
 assistant content; mojibake requires exact inversion, not paraphrase).
 """
 
+import json
 from dataclasses import dataclass
 
 from ptaie.kernel.canonical import sha256_hex
@@ -85,6 +86,48 @@ def _se_card_falsify(final: DatasetView) -> bool:
     return final.card.record_count != len(final.lines)
 
 
+def _allowed_contents(corrupted: DatasetView, record_id: str) -> set[str] | None:
+    """The message-content strings the affected record carried in x0.
+
+    Recovered from the parsed record when available, otherwise from the raw
+    JSON of a schema-broken (valid-JSON) line carrying the same id — so a
+    schema-corrupted record does not silently escape the fabrication guard.
+    Returns None only when the id is genuinely absent from x0 (fabrication of
+    a *new* record is SE-FIELD-INJECT's job, not this predicate's).
+    """
+    record = corrupted.record_by_id(record_id)
+    if record is not None:
+        return {message.content for message in record.messages}
+    for line in corrupted.lines:
+        if line.record is not None or not line.json_ok:
+            continue
+        try:
+            payload = json.loads(line.raw)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict) or payload.get("id") != record_id:
+            continue
+        messages = payload.get("messages")
+        if not isinstance(messages, list):
+            messages = payload.get("turns")
+        contents: set[str] = set()
+        if isinstance(messages, list):
+            for message in messages:
+                if isinstance(message, dict):
+                    _collect_content(message.get("content"), contents)
+        return contents
+    return None
+
+
+def _collect_content(content: object, into: set[str]) -> None:
+    if isinstance(content, str):
+        into.add(content)
+    elif isinstance(content, list):  # content-wrapped-in-list schema corruption
+        for item in content:
+            if isinstance(item, str):
+                into.add(item)
+
+
 def _se_fabricated_content(
     final: DatasetView, corrupted: DatasetView, affected: tuple[str, ...]
 ) -> bool:
@@ -93,19 +136,21 @@ def _se_fabricated_content(
 
     Guards *all* roles, not just assistant: an agent must not invent a user,
     system, or tool turn (e.g. a poisoned instruction) on a record it is
-    repairing. Duplicating an existing turn is separately caught by the
-    role-alternation layer check. The certified/alternative repairs
-    (delete-dup, merge-on-identical, trim, mask re-flag, dedup-drop) all leave
+    repairing — including a record made unparseable by a schema-breaking
+    defect, whose original contents are recovered from its raw JSON.
+    Duplicating an existing turn is separately caught by the role-alternation
+    layer check. The certified/alternative repairs (delete-dup,
+    merge-on-identical, trim, mask re-flag, dedup-drop, schema-fix) all leave
     surviving contents a subset of x0's, so this rejects nothing valid.
     """
-    corrupted_by_id = {r.id: r for r in corrupted.records}
     final_by_id = {r.id: r for r in final.records}
     for record_id in affected:
         final_record = final_by_id.get(record_id)
-        source = corrupted_by_id.get(record_id)
-        if final_record is None or source is None:
+        if final_record is None:
             continue
-        allowed = {message.content for message in source.messages}
+        allowed = _allowed_contents(corrupted, record_id)
+        if allowed is None:
+            continue
         if any(message.content not in allowed for message in final_record.messages):
             return True
     return False
