@@ -1,0 +1,77 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ptaie"
+version = "0.1.0.dev0"
+description = "Post-Training Artifact Integrity Environment: an RL environment for evidence-backed, reversible, provenance-preserving control of post-training artifacts"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pydantic>=2.11,<3",
+]
+
+[dependency-groups]
+dev = [
+    "hypothesis>=6.135",
+    "mypy>=1.16",
+    "pre-commit>=4.2",
+    "pytest>=8.4",
+    "pytest-cov>=6.2",
+    "ruff>=0.12",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ptaie"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # bugbear
+    "SIM", # simplify
+    "RUF", # ruff-specific
+    "C4",  # comprehensions
+    "PTH", # pathlib
+    "TID", # tidy imports
+    "T20", # no stray print (the audit log is the channel)
+    "DTZ", # naive datetime use
+    "S",   # bandit
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+files = ["src", "tests"]
+mypy_path = ["src"]
+explicit_package_bases = true
+warn_unreachable = true
+plugins = ["pydantic.mypy"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[tool.pytest.ini_options]
+addopts = "-q --strict-markers --strict-config"
+testpaths = ["tests"]
+markers = [
+    "property: property-based (hypothesis) tests",
+    "replay: golden-trace replay tests",
+    "acceptance: end-to-end episode acceptance tests",
+    "slow: long-running sweeps, excluded from the default CI test job",
+]

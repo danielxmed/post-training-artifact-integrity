@@ -65,4 +65,13 @@ Development happens on WSL2/Ubuntu, but the environment must be portable like an
 
 ## Commands
 
-No build system, test runner, or linter exists yet. When tooling is introduced, document the exact commands here (install, run tests, run a single test, lint) and mirror them in `CLAUDE.md`.
+Python 3.12 + [uv](https://docs.astral.sh/uv/). `uv.lock` is committed; CI installs with `uv sync --frozen`.
+
+- Install (incl. dev tools): `uv sync`
+- Run all tests: `uv run pytest`
+- Run a single test: `uv run pytest tests/unit/test_smoke.py::test_version_is_exposed`
+- Markers (`-m`): `property`, `replay`, `acceptance`, `slow` — the default CI test job runs `-m "not replay and not acceptance and not slow"`
+- Lint: `uv run ruff check .`
+- Format: `uv run ruff format .` (CI checks with `--check`)
+- Typecheck: `uv run mypy` (targets configured in `pyproject.toml`)
+- Git hooks (optional): `uv run pre-commit install`; run manually with `uv run pre-commit run --all-files`
