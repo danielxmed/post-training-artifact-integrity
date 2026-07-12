@@ -7,6 +7,7 @@ chosen disposition (never from hidden latent state), and returns a fixed
 reward vector. The real sft_chat finalizer arrives in PR5.
 """
 
+from ptaie.kernel.audit import AuditLog
 from ptaie.kernel.claims import SealedClaimBundle
 from ptaie.kernel.rewards import ConstraintVector, OutcomeClass, RewardVector, TerminalDisposition
 from ptaie.kernel.store.workspace import WorkspaceReadView
@@ -27,9 +28,12 @@ class StubFinalizer:
         self,
         *,
         task: TaskRecord,
-        view: WorkspaceReadView,
+        initial_view: WorkspaceReadView,
+        final_view: WorkspaceReadView,
         sealed: SealedClaimBundle,
         constraint: ConstraintVector,
+        audit: AuditLog,
+        resource_cost: float,
     ) -> VerificationReport:
         outcome = (
             OutcomeClass.INTEGRITY_VIOLATION

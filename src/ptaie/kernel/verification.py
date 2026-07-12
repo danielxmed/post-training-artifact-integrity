@@ -10,9 +10,12 @@ verifiers. Hidden verifiers run only after the claim bundle is sealed.
 """
 
 from enum import IntEnum, StrEnum
-from typing import Protocol, Self, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, Self, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, model_validator
+
+if TYPE_CHECKING:
+    from ptaie.kernel.audit import AuditLog
 
 from ptaie.kernel.canonical import JsonValue
 from ptaie.kernel.claims import SealedClaimBundle
@@ -144,7 +147,14 @@ class Finalizer(Protocol):
         self,
         *,
         task: TaskRecord,
-        view: WorkspaceReadView,
+        initial_view: WorkspaceReadView,
+        final_view: WorkspaceReadView,
         sealed: SealedClaimBundle,
         constraint: ConstraintVector,
-    ) -> VerificationReport: ...
+        audit: "AuditLog",
+        resource_cost: float,
+    ) -> VerificationReport:
+        """``initial_view`` is the corrupted x0 workspace; ``final_view`` is the
+        committed state. ``audit`` is read-only (for evidence assessment).
+        ``resource_cost`` is the fraction of the cost budget consumed."""
+        ...

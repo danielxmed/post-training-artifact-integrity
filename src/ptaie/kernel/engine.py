@@ -42,7 +42,7 @@ from ptaie.kernel.rewards import ConstraintVector, RewardVector, TerminalCode
 from ptaie.kernel.rng import DerivedRng, derive_seed
 from ptaie.kernel.store.blob import BlobStore
 from ptaie.kernel.store.manifest import Manifest
-from ptaie.kernel.store.workspace import Workspace
+from ptaie.kernel.store.workspace import Workspace, WorkspaceReadView
 from ptaie.kernel.task import TaskRecord
 from ptaie.kernel.tools.base import ConstraintSink, ToolContext
 from ptaie.kernel.tools.builtin import builtin_tools
@@ -86,6 +86,7 @@ class EpisodeEngine:
         "_constraint",
         "_env_version",
         "_finalizer",
+        "_initial_manifest",
         "_ledger",
         "_oracle",
         "_phase",
@@ -122,6 +123,7 @@ class EpisodeEngine:
         self._ledger = BudgetLedger(task.public.budgets)
         self._constraint = ConstraintVector()
         self._workspace = Workspace(store, manifest)
+        self._initial_manifest = manifest
         self._rng = DerivedRng(derive_seed(task.seed, "episode", env_version))
         self._step_index = 0
         self._phase = "created"
@@ -256,9 +258,12 @@ class EpisodeEngine:
         sealed = self._audit.seal_claim(action.claim_bundle, step_index=self._step_index)
         report = self._finalizer.finalize(
             task=self._task,
-            view=self._workspace.read_view(),
+            initial_view=WorkspaceReadView(self._store, self._initial_manifest),
+            final_view=self._workspace.read_view(),
             sealed=sealed,
             constraint=self._constraint,
+            audit=self._audit,
+            resource_cost=self._resource_cost(),
         )
         self._report = report
         self._constraint = report.constraint
@@ -291,6 +296,13 @@ class EpisodeEngine:
     def _charge(self, charge: BudgetCharge) -> tuple[str, ...] | None:
         result = self._ledger.charge(charge)
         return None if result.applied else result.exhausted
+
+    def _resource_cost(self) -> float:
+        max_cost = self._task.public.budgets.max_cost_units
+        if max_cost <= 0:
+            return 0.0
+        consumed = max_cost - self._ledger.view().remaining_cost_units
+        return consumed / max_cost
 
     def _latch(self, flags: frozenset[str]) -> bool:
         if not flags:
