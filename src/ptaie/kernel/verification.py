@@ -19,7 +19,7 @@ from ptaie.kernel.claims import SealedClaimBundle
 from ptaie.kernel.contract import HiddenBaseModel
 from ptaie.kernel.rewards import ConstraintVector, OutcomeClass, RewardVector
 from ptaie.kernel.store.workspace import WorkspaceReadView
-from ptaie.kernel.task import TaskHidden
+from ptaie.kernel.task import TaskHidden, TaskRecord
 
 
 class VerifierLayer(IntEnum):
@@ -127,3 +127,24 @@ class Verifier(Protocol):
         sealed: SealedClaimBundle,
         hidden: TaskHidden,
     ) -> tuple[VerifierResult, ...]: ...
+
+
+@runtime_checkable
+class Finalizer(Protocol):
+    """Runs hidden verification and produces the terminal reward/constraint
+    record, *after* the claim bundle has been sealed.
+
+    The engine owns the seal-then-verify ordering; the finalizer owns the
+    (plugin-specific) classification and scoring. It receives hidden task
+    state because it is environment-owned code — never reachable by the agent.
+    This is the seam PR5's scorer implements; PR4 injects a stub in tests.
+    """
+
+    def finalize(
+        self,
+        *,
+        task: TaskRecord,
+        view: WorkspaceReadView,
+        sealed: SealedClaimBundle,
+        constraint: ConstraintVector,
+    ) -> VerificationReport: ...

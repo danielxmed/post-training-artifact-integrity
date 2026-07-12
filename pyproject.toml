@@ -74,6 +74,7 @@ warn_required_dynamic_aliases = true
 [tool.pytest.ini_options]
 addopts = "-q --strict-markers --strict-config"
 testpaths = ["tests"]
+pythonpath = ["."]
 markers = [
     "property: property-based (hypothesis) tests",
     "replay: golden-trace replay tests",
