@@ -132,6 +132,24 @@ def test_calibration_reward_is_truthful() -> None:
     assert calibration_reward(1.0, OutcomeClass.FALSE_COMMIT) == pytest.approx(-1.0)
 
 
+def test_statement_matches_binds_to_verifier_truth() -> None:
+    from ptaie.kernel.verification import CheckStatus
+    from ptaie.plugins.sft_chat.finalize import _statement_matches
+
+    # restored/verified_intact only when the invariant actually passes
+    assert _statement_matches("restored", CheckStatus.PASSED)
+    assert not _statement_matches("restored", CheckStatus.FAILED)
+    assert not _statement_matches("verified_intact", CheckStatus.BLOCKED)
+    # not_addressed only when it actually fails/blocks
+    assert _statement_matches("not_addressed", CheckStatus.FAILED)
+    assert not _statement_matches("not_addressed", CheckStatus.PASSED)
+    # cannot_determine is credited ONLY with no determinate status (no true
+    # contract) — never as a hedge against a determinate PASSED/FAILED
+    assert _statement_matches("cannot_determine", None)
+    assert not _statement_matches("cannot_determine", CheckStatus.PASSED)
+    assert not _statement_matches("cannot_determine", CheckStatus.FAILED)
+
+
 def test_is_correct_outcome() -> None:
     assert is_correct_outcome(OutcomeClass.CORRECT_COMMIT)
     assert is_correct_outcome(OutcomeClass.JUSTIFIED_ABSTAIN)

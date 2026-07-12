@@ -14,7 +14,7 @@ Two deliberate textgen invariants:
 
 from ptaie.kernel.rng import DerivedRng
 from ptaie.plugins.sft_chat.contract import SftChatContract
-from ptaie.plugins.sft_chat.schema import ChatMessage, ChatRecord
+from ptaie.plugins.sft_chat.schema import ChatMessage, ChatRecord, normalized_content_key
 
 _HEX = "0123456789abcdef"
 
@@ -158,14 +158,36 @@ def build_record(rng: DerivedRng, contract: SftChatContract, *, template_index: 
 
 
 def build_records(rng: DerivedRng, contract: SftChatContract, count: int) -> list[ChatRecord]:
-    """Build ``count`` clean records. At least one multi-turn record (two
-    assistant turns) is always present so mask conventions are inferable and
-    truncation has trim room."""
+    """Build ``count`` clean records with *distinct* content.
+
+    At least one multi-turn record (two assistant turns) is always present so
+    mask conventions are inferable and truncation has trim room. Content is
+    made globally distinct (the small word banks can otherwise collide), so a
+    dedup-relevant task's only exact duplicate is the deliberately injected
+    one and a clean bundle never accidentally violates the dedup contract.
+    """
     records = []
+    seen: set[str] = set()
     for index in range(count):
         # index 1 is forced multi-turn; the rest cycle through templates
         template_index = 1 if index == 1 else rng.randint(0, len(_TEMPLATES) - 1)
-        records.append(
-            build_record(rng.substream(f"record-{index}"), contract, template_index=template_index)
+        record = build_record(
+            rng.substream(f"record-{index}"), contract, template_index=template_index
         )
+        if normalized_content_key(record) in seen:
+            record = _disambiguate(record, index)
+        seen.add(normalized_content_key(record))
+        records.append(record)
     return records
+
+
+def _disambiguate(record: ChatRecord, index: int) -> ChatRecord:
+    """Append a positional clause to the final assistant turn so the record's
+    content is unique (terminal punctuation preserved)."""
+    messages = list(record.messages)
+    for position in range(len(messages) - 1, -1, -1):
+        if messages[position].role == "assistant":
+            content = f"{messages[position].content} (variant {index})."
+            messages[position] = messages[position].model_copy(update={"content": content})
+            break
+    return record.model_copy(update={"messages": tuple(messages)})

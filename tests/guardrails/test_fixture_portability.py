@@ -5,7 +5,10 @@ from pathlib import Path
 
 FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
 DRIVE_LETTER = re.compile(r"[A-Za-z]:[\\/]")
-FORBIDDEN_SUBSTRINGS = ("wsl.localhost", "\\\\", "/home/", "C:\\")
+# A bare double-backslash is NOT a signal — it appears legitimately as
+# JSON escaping in nested-JSON fixtures (e.g. golden traces). The real
+# host-path signals are UNC hostnames, POSIX home paths, and drive letters.
+FORBIDDEN_SUBSTRINGS = ("wsl.localhost", "/home/", "C:\\")
 
 
 def test_fixtures_contain_no_host_specific_paths() -> None:

@@ -34,7 +34,6 @@ from ptaie.plugins.sft_chat.kernelmap import decode_spec
 from ptaie.plugins.sft_chat.verifiers.equivalence import EquivalenceVerdict, evaluate_commit
 
 _PROGRESS_CAP = 0.5
-_EVIDENCE_KINDS = frozenset({AuditEventKind.TOOL_RESULT, AuditEventKind.CLARIFICATION})
 _NO_ARTIFACT_DISPOSITIONS = frozenset(
     {
         TerminalDisposition.ABSTAIN,
@@ -163,11 +162,12 @@ class SftChatFinalizer:
                     )
                 )
                 continue
-            cites_inspection = bool(claim.evidence_refs) and all(
-                audit.verify_ref(ref)
-                and by_index.get(ref.event_index) is not None
-                and by_index[ref.event_index].kind in _EVIDENCE_KINDS
-                for ref in claim.evidence_refs
+            cites_inspection = (
+                bool(claim.evidence_refs)
+                and all(audit.verify_ref(ref) for ref in claim.evidence_refs)
+                and any(
+                    _inspects_artifact(by_index.get(ref.event_index)) for ref in claim.evidence_refs
+                )
             )
             # Support requires BOTH a real inspection/test citation AND the
             # claim's statement matching the actual per-invariant verifier
@@ -206,6 +206,23 @@ class SftChatFinalizer:
         return 0.0
 
 
+def _inspects_artifact(event: AuditEvent | None) -> bool:
+    """Whether an audit event is a genuine inspection of the artifact under
+    repair — a read of the data or card file, or a visible-validator run.
+
+    Evidence for a repair claim must cite such an event; a bare directory
+    listing, hash, or snapshot does not count. (Hidden-layer invariants cannot
+    be inspected in M1, so coverage is at the artifact-file granularity;
+    per-invariant coverage is deferred to when richer inspection tools exist.)
+    """
+    if event is None or event.kind is not AuditEventKind.TOOL_RESULT:
+        return False
+    tool = event.payload.get("tool")
+    if tool == "kernel.run_visible_validators":
+        return True
+    return tool == "kernel.read_file" and event.payload.get("target") in (DATA_PATH, CARD_PATH)
+
+
 def _restored_fraction(
     nodes: tuple[DefectNode, ...], final_status: dict[str, CheckStatus]
 ) -> float:
@@ -220,14 +237,21 @@ def _restored_fraction(
 
 def _statement_matches(statement: str, status: CheckStatus | None) -> bool:
     """Whether a claim's statement is consistent with the actual verifier
-    status of the invariant in the committed artifact."""
+    status of the invariant in the committed artifact.
+
+    ``cannot_determine`` is credited ONLY when the invariant is genuinely
+    non-determinable here (no true contract, i.e. ``status is None``). Against
+    a determinate status it is not creditable — otherwise an agent could hedge
+    every claim to ``cannot_determine`` and harvest full evidence reward on a
+    broken commit whose invariants the environment plainly determined.
+    """
     if status is None:  # no true contract (abstain/defer tasks): can't verify
         return statement == "cannot_determine"
     if statement in ("restored", "verified_intact"):
         return status is CheckStatus.PASSED
     if statement == "not_addressed":
         return status in (CheckStatus.FAILED, CheckStatus.BLOCKED)
-    return statement == "cannot_determine"
+    return False
 
 
 def _read(view: WorkspaceReadView) -> tuple[bytes, bytes]:
