@@ -100,9 +100,7 @@ def _normalize_mask(messages: list[ChatMessage], contract: SftChatContract) -> l
     recomputed or an ``explicit_final_assistant_only`` record ends up
     inconsistent.
     """
-    final_assistant = max(
-        (i for i, m in enumerate(messages) if m.role == "assistant"), default=-1
-    )
+    final_assistant = max((i for i, m in enumerate(messages) if m.role == "assistant"), default=-1)
     if contract.mask_convention == "implicit_assistant":
         return [m.model_copy(update={"loss": None}) for m in messages]
     return [
