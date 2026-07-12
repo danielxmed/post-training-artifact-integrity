@@ -152,6 +152,26 @@ def test_report_inconsistency_is_acknowledged() -> None:
     assert not result.terminated
 
 
+def test_regenerate_card_on_broken_data_is_precondition_not_engine_fault() -> None:
+    # An agent that writes garbage then regenerates the card must get a typed
+    # PRECONDITION_FAILED, never INTERNAL_ERROR{engine_fault} (a false bug signal).
+    env = _env()
+    env.reset(task_seed=14, artifact_class="sft_chat", env_version=ENV_VER)
+    env.step(
+        ToolAction(
+            tool_name="sft_chat.replace_record",
+            arguments={"line_index": 0, "raw_line": "not-json"},
+        )
+    )
+    result = env.step(ToolAction(tool_name="sft_chat.regenerate_card"))
+    payload = result.observation.payload
+    assert isinstance(payload, ToolResultPayload)
+    assert payload.outcome.status == "error"
+    assert payload.outcome.error is not None
+    assert payload.outcome.error.code.value == "precondition_failed"
+    assert payload.outcome.error.details.get("engine_fault") is None
+
+
 def test_replace_record_mutates_and_is_reversible() -> None:
     env = _env()
     env.reset(task_seed=10, artifact_class="sft_chat", env_version=ENV_VER)

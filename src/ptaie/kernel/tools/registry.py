@@ -69,6 +69,10 @@ class ToolRegistry:
             )
         try:
             output = tool.execute(ctx, args)
+            # Serialize inside the guard: a tool whose output model fails to
+            # serialize must still become a typed error, never an exception
+            # crossing to the agent.
+            dumped = _dump(output)
         except PathViolationError:
             ctx.constraints.flag("escape")
             return _err(ToolErrorCode.PATH_OUT_OF_SCOPE, "path is out of scope", {})
@@ -78,7 +82,7 @@ class ToolRegistry:
             return _err(ToolErrorCode.FILE_NOT_FOUND, "path not found", {"path": exc.path})
         except Exception:
             return _err(ToolErrorCode.INTERNAL_ERROR, "internal tool error", {"engine_fault": True})
-        return ToolOutcome(status="ok", output=_dump(output))
+        return ToolOutcome(status="ok", output=dumped)
 
 
 def _err(code: ToolErrorCode, message: str, details: dict[str, JsonValue]) -> ToolOutcome:

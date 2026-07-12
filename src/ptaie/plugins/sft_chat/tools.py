@@ -14,7 +14,7 @@ from ptaie.kernel.budgets import BudgetCharge
 from ptaie.kernel.tools.base import Tool, ToolContext, ToolPreconditionError, ToolSpec
 from ptaie.plugins.sft_chat import CARD_PATH, DATA_PATH
 from ptaie.plugins.sft_chat.repairs import regenerate_card
-from ptaie.plugins.sft_chat.schema import split_data_lines
+from ptaie.plugins.sft_chat.schema import parse_record_line, split_data_lines
 
 
 class _Model(BaseModel):
@@ -151,6 +151,17 @@ class RegenerateCard:
         args = cast(RegenerateCardArgs, args)
         if not ctx.has(DATA_PATH) or not ctx.has(CARD_PATH):
             raise ToolPreconditionError("data or card file is missing", {})
+        # The card can only be regenerated from parseable data; an unparseable
+        # record is an agent-caused precondition failure (PRECONDITION_FAILED),
+        # not an environment fault.
+        for index, line in enumerate(split_data_lines(ctx.read(DATA_PATH))):
+            try:
+                parse_record_line(line)
+            except ValueError:
+                raise ToolPreconditionError(
+                    "data has an unparseable record; fix it before regenerating the card",
+                    {"line_index": index},
+                ) from None
         # The card regeneration reuses the declared block from the current card
         # but recomputes count + hash from the current data. The contract is
         # not needed here (declared/notes are carried through), so a throwaway
