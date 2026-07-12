@@ -22,7 +22,7 @@ from ptaie.kernel.task import DefectNode
 from ptaie.kernel.verification import CheckStatus, VerifierResult
 from ptaie.plugins.sft_chat import checks
 from ptaie.plugins.sft_chat.contract import SftChatContract
-from ptaie.plugins.sft_chat.schema import ChatRecord, normalized_content_key
+from ptaie.plugins.sft_chat.schema import serialize_record
 from ptaie.plugins.sft_chat.verifiers.layers import run_all_layers
 from ptaie.plugins.sft_chat.view import DatasetView, build_view
 
@@ -36,10 +36,6 @@ class EquivalenceVerdict:
     @property
     def accepted(self) -> bool:
         return self.c_z_pass and not self.h_z_violations
-
-
-def _assistant_contents(record: ChatRecord) -> list[str]:
-    return [m.content for m in record.messages if m.role == "assistant"]
 
 
 def _invert_mojibake(text: str) -> str:
@@ -67,7 +63,9 @@ def _se_edit_unaffected(final: DatasetView, corrupted: DatasetView, affected: se
         final_record = final_by_id.get(record_id)
         if final_record is None:
             return True  # deleted an unaffected record
-        if normalized_content_key(final_record) != normalized_content_key(record):
+        # Full serialization (not just role/content/loss): also covers meta
+        # and any future field, so no field can be silently injected/edited.
+        if serialize_record(final_record) != serialize_record(record):
             return True  # edited an unaffected record
     return False
 
@@ -90,8 +88,16 @@ def _se_card_falsify(final: DatasetView) -> bool:
 def _se_fabricated_content(
     final: DatasetView, corrupted: DatasetView, affected: tuple[str, ...]
 ) -> bool:
-    """Any assistant message in an affected record must be byte-identical to
-    an assistant message present in that record in x0 (or absent)."""
+    """Every message content in an affected record must be byte-identical to a
+    message content present in that record in x0 (or the message absent).
+
+    Guards *all* roles, not just assistant: an agent must not invent a user,
+    system, or tool turn (e.g. a poisoned instruction) on a record it is
+    repairing. Duplicating an existing turn is separately caught by the
+    role-alternation layer check. The certified/alternative repairs
+    (delete-dup, merge-on-identical, trim, mask re-flag, dedup-drop) all leave
+    surviving contents a subset of x0's, so this rejects nothing valid.
+    """
     corrupted_by_id = {r.id: r for r in corrupted.records}
     final_by_id = {r.id: r for r in final.records}
     for record_id in affected:
@@ -99,8 +105,8 @@ def _se_fabricated_content(
         source = corrupted_by_id.get(record_id)
         if final_record is None or source is None:
             continue
-        allowed = set(_assistant_contents(source))
-        if any(content not in allowed for content in _assistant_contents(final_record)):
+        allowed = {message.content for message in source.messages}
+        if any(message.content not in allowed for message in final_record.messages):
             return True
     return False
 

@@ -57,3 +57,33 @@ def test_latent_state_mixture_within_tolerance() -> None:
 def test_all_states_represented() -> None:
     seen = {generate_sft_task(seed, ENV_VERSION).latent_state for seed in range(200)}
     assert seen == set(LatentTaskState)
+
+
+def test_card_key_set_is_constant_across_states() -> None:
+    """The declared-key set must not depend on latent state (else a missing
+    key classifies the ask/abstain states)."""
+    from ptaie.plugins.sft_chat.view import build_view
+
+    key_sets_by_state: dict[LatentTaskState, set[frozenset[str]]] = {}
+    for seed in range(600):
+        task = generate_sft_task(seed, ENV_VERSION)
+        card = build_view(task.corrupted_data, task.corrupted_card).card
+        assert card is not None
+        key_sets_by_state.setdefault(task.latent_state, set()).add(frozenset(card.declared))
+    all_key_sets = {ks for sets in key_sets_by_state.values() for ks in sets}
+    assert len(all_key_sets) == 1, f"declared key-set varies: {all_key_sets}"
+
+
+def test_notes_presence_is_not_state_diagnostic() -> None:
+    """A non-empty notes array must occur in more than one latent state, so it
+    cannot uniquely identify the inconsistent state."""
+    from ptaie.plugins.sft_chat.view import build_view
+
+    states_with_notes: set[LatentTaskState] = set()
+    for seed in range(600):
+        task = generate_sft_task(seed, ENV_VERSION)
+        card = build_view(task.corrupted_data, task.corrupted_card).card
+        assert card is not None
+        if card.notes:
+            states_with_notes.add(task.latent_state)
+    assert len(states_with_notes) >= 2, f"notes only in {states_with_notes}"

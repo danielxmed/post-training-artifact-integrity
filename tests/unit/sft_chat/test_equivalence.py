@@ -22,16 +22,21 @@ from ptaie.plugins.sft_chat.verifiers.equivalence import EquivalenceVerdict, eva
 from ptaie.version import ENV_VERSION
 
 
-def _find(operator: str, *, single: bool = True) -> SftTask:
+def _find(
+    operator: str,
+    *,
+    single: bool = True,
+    state: LatentTaskState = LatentTaskState.REPAIRABLE,
+) -> SftTask:
     for seed in range(3000):
         task = generate_sft_task(seed, ENV_VERSION)
-        if task.latent_state is not LatentTaskState.REPAIRABLE:
+        if task.latent_state is not state:
             continue
         if single and len(task.nodes) != 1:
             continue
         if task.nodes and task.nodes[0].operator == operator:
             return task
-    raise AssertionError(f"no single-{operator} repairable task in seed range")
+    raise AssertionError(f"no single-{operator} {state.value} task in seed range")
 
 
 def _evaluate(task: SftTask, data: bytes, card: bytes) -> EquivalenceVerdict:
@@ -141,7 +146,8 @@ def test_mojibake_invert_accepted_but_paraphrase_rejected() -> None:
 
 
 def test_dedup_keep_any_one_accepted_delete_both_rejected() -> None:
-    task = _find("DuplicateRecords")
+    # dedup defects live in ambiguous tasks (dedup_policy is never surfaced)
+    task = _find("DuplicateRecords", state=LatentTaskState.AMBIGUOUS_RESOLVABLE)
     keep_data, keep_card = apply_repairs(
         task.corrupted_data, task.corrupted_card, list(task.nodes), task.contract
     )
