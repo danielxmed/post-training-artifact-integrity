@@ -5,6 +5,10 @@ hidden object ends up interpolated into an error message or log line, its
 values must not appear.
 """
 
+from typing import Any, cast
+
+from pydantic import ValidationError
+
 from ptaie.kernel.budgets import Budgets
 from ptaie.kernel.contract import (
     ContractVariant,
@@ -12,7 +16,12 @@ from ptaie.kernel.contract import (
     LatentContract,
     Requirement,
 )
-from ptaie.kernel.rewards import TerminalDisposition
+from ptaie.kernel.rewards import (
+    ConstraintVector,
+    OutcomeClass,
+    RewardVector,
+    TerminalDisposition,
+)
 from ptaie.kernel.store.vault import HiddenVault
 from ptaie.kernel.task import (
     ClarificationEntry,
@@ -21,6 +30,13 @@ from ptaie.kernel.task import (
     TaskHidden,
     TaskPublic,
     TaskRecord,
+)
+from ptaie.kernel.verification import (
+    CheckStatus,
+    ClaimAssessment,
+    VerificationReport,
+    VerifierLayer,
+    VerifierResult,
 )
 
 CANARY = "CANARY-93af1-SECRET"
@@ -76,6 +92,52 @@ def test_hidden_models_redact_repr_and_str() -> None:
     for subject in subjects:
         for rendering in (repr(subject), str(subject), f"{subject}"):
             assert CANARY not in rendering, f"{type(subject).__name__} leaks values via repr/str"
+
+
+def test_validation_errors_do_not_echo_hidden_input() -> None:
+    """pydantic ValidationError must not leak hidden values (hide_input_in_errors)."""
+    try:
+        ClarificationEntry(question_key=CANARY, answer_kind="unknown", answer_value=CANARY)
+    except ValidationError as error:
+        assert CANARY not in str(error)
+        assert CANARY not in repr(error)
+    else:
+        raise AssertionError("expected ValidationError")
+
+
+def test_rich_and_devtools_renderers_get_no_values() -> None:
+    """__repr_args__ is the source rich/devtools formatters read — it must be empty."""
+    hidden = _hidden_with_canary()
+    assert list(hidden.__repr_args__()) == []
+    # pydantic types __rich_repr__ as a plain callable attribute; go through
+    # Any to call it the way rich would.
+    rendered = "".join(str(part) for part in cast(Any, hidden).__rich_repr__())
+    assert CANARY not in rendered
+
+
+def test_verification_models_are_redacted() -> None:
+    report = VerificationReport(
+        sealed_bundle_hash="f" * 64,
+        results=(
+            VerifierResult(
+                check_id="sft_chat.schema",
+                layer=VerifierLayer.SCHEMA,
+                status=CheckStatus.FAILED,
+                failure_codes=(CANARY,),
+                details={"secret": CANARY},
+            ),
+        ),
+        claim_assessments=(ClaimAssessment(claim_id="c1", supported=False, reason=CANARY),),
+        semantic_pass=False,
+        outcome_class=OutcomeClass.FALSE_COMMIT,
+        constraint=ConstraintVector(),
+        reward=RewardVector.zero(),
+    )
+    for rendering in (repr(report), str(report), f"{report}"):
+        assert CANARY not in rendering
+    assessment = report.claim_assessments[0]
+    for rendering in (repr(assessment), str(assessment), f"{assessment}"):
+        assert CANARY not in rendering
 
 
 def test_task_record_repr_redacts_the_hidden_half() -> None:

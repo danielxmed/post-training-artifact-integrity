@@ -18,14 +18,40 @@ to this module, not the library.
 import hashlib
 import json
 import math
+from typing import Annotated
+
+from pydantic import AllowInfNan
 
 from ptaie.kernel.errors import CanonicalizationError
 
-type JsonValue = None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
+# The pydantic-facing alias rejects non-finite floats at validation time, so a
+# wire-valid value is always canonicalizable — the two contracts must agree.
+type JsonValue = (
+    None
+    | bool
+    | int
+    | Annotated[float, AllowInfNan(False)]
+    | str
+    | list["JsonValue"]
+    | dict[str, "JsonValue"]
+)
+
+
+def _require_encodable(value: str, path: str) -> None:
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        # Lone UTF-16 surrogates are legal JSON escapes (json.loads accepts
+        # "\ud800") but are not encodable text; reject them with the typed
+        # error instead of crashing at the encode step.
+        raise CanonicalizationError(f"unpaired surrogate in string at {path}") from None
 
 
 def _validate(value: object, path: str) -> None:
-    if value is None or isinstance(value, bool | int | str):
+    if value is None or isinstance(value, bool | int):
+        return
+    if isinstance(value, str):
+        _require_encodable(value, path)
         return
     if isinstance(value, float):
         if math.isnan(value) or math.isinf(value):
@@ -39,6 +65,7 @@ def _validate(value: object, path: str) -> None:
         for key, item in value.items():
             if not isinstance(key, str):
                 raise CanonicalizationError(f"non-string key {key!r} at {path}")
+            _require_encodable(key, f"{path}.<key>")
             _validate(item, f"{path}.{key}")
         return
     raise CanonicalizationError(f"non-JSON type {type(value).__name__} at {path}")
@@ -51,13 +78,16 @@ def canonical_json_bytes(value: object) -> bytes:
     convert via ``model_dump(mode="json")`` or explicit construction).
     """
     _validate(value, "$")
-    return json.dumps(
-        value,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-        allow_nan=False,
-    ).encode("utf-8")
+    try:
+        return json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+    except UnicodeEncodeError as exc:  # backstop: _validate should have caught it
+        raise CanonicalizationError(f"unencodable string: {exc}") from exc
 
 
 def sha256_hex(data: bytes) -> str:

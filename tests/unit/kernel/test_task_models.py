@@ -177,6 +177,59 @@ def test_trap_spec_iff_adversarial() -> None:
         )
 
 
+def test_determinate_states_require_determinate_contract() -> None:
+    with pytest.raises(ValidationError, match="determinate contract"):
+        TaskHidden(
+            latent_state=LatentTaskState.REPAIRABLE,
+            contract=_contract(variants=2, true_variant=None),
+            defect_dag=(_defect(),),
+            expected_disposition=TerminalDisposition.COMMIT,
+        )
+    with pytest.raises(ValidationError, match="determinate contract"):
+        TaskHidden(
+            latent_state=LatentTaskState.ALREADY_CORRECT,
+            contract=_contract(variants=2, true_variant=None),
+            expected_disposition=TerminalDisposition.VERIFIED_NOOP,
+        )
+
+
+def test_defect_dag_rejects_cycles_and_self_references() -> None:
+    with pytest.raises(ValidationError, match="references itself"):
+        TaskHidden(
+            latent_state=LatentTaskState.REPAIRABLE,
+            contract=_contract(),
+            defect_dag=(_defect("d1", parents=("d1",)),),
+            expected_disposition=TerminalDisposition.COMMIT,
+        )
+    with pytest.raises(ValidationError, match="references itself"):
+        TaskHidden(
+            latent_state=LatentTaskState.REPAIRABLE,
+            contract=_contract(),
+            defect_dag=(_defect("d1", masks=("d1",)),),
+            expected_disposition=TerminalDisposition.COMMIT,
+        )
+    with pytest.raises(ValidationError, match="cycle"):
+        TaskHidden(
+            latent_state=LatentTaskState.REPAIRABLE,
+            contract=_contract(),
+            defect_dag=(
+                _defect("d1", parents=("d2",)),
+                _defect("d2", parents=("d1",)),
+            ),
+            expected_disposition=TerminalDisposition.COMMIT,
+        )
+    # a real chain is fine
+    TaskHidden(
+        latent_state=LatentTaskState.REPAIRABLE,
+        contract=_contract(),
+        defect_dag=(
+            _defect("root"),
+            _defect("child", parents=("root",), masks=("root",)),
+        ),
+        expected_disposition=TerminalDisposition.COMMIT,
+    )
+
+
 def test_defect_dag_reference_validation() -> None:
     with pytest.raises(ValidationError, match="unknown parent"):
         TaskHidden(

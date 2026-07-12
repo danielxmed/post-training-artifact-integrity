@@ -164,6 +164,14 @@ class TaskHidden(HiddenBaseModel):
             len(self.contract.variants) < 2 or self.contract.true_variant_id is not None
         ):
             raise ValueError("UNDERDETERMINED requires >=2 contract variants and no true variant")
+        if (
+            state not in (LatentTaskState.AMBIGUOUS_RESOLVABLE, LatentTaskState.UNDERDETERMINED)
+            and len(self.contract.variants) > 1
+            and self.contract.true_variant_id is None
+        ):
+            raise ValueError(
+                f"{state} requires a determinate contract (single variant or true_variant_id set)"
+            )
         return self
 
     def _check_dag(self) -> None:
@@ -172,12 +180,31 @@ class TaskHidden(HiddenBaseModel):
         if len(known) != len(defect_ids):
             raise ValueError("defect ids must be unique")
         for node in self.defect_dag:
+            if node.defect_id in node.parents or node.defect_id in node.masks:
+                raise ValueError(f"defect {node.defect_id} references itself")
             for parent in node.parents:
                 if parent not in known:
                     raise ValueError(f"defect {node.defect_id} has unknown parent {parent}")
             for masked in node.masks:
                 if masked not in known:
                     raise ValueError(f"defect {node.defect_id} masks unknown defect {masked}")
+        # Kahn's algorithm over parent edges: reject cycles (a DAG, not a graph).
+        indegree = {node.defect_id: len(node.parents) for node in self.defect_dag}
+        children: dict[str, list[str]] = {node.defect_id: [] for node in self.defect_dag}
+        for node in self.defect_dag:
+            for parent in node.parents:
+                children[parent].append(node.defect_id)
+        queue = [defect_id for defect_id, degree in indegree.items() if degree == 0]
+        visited = 0
+        while queue:
+            current = queue.pop()
+            visited += 1
+            for child in children[current]:
+                indegree[child] -= 1
+                if indegree[child] == 0:
+                    queue.append(child)
+        if visited != len(self.defect_dag):
+            raise ValueError("defect_dag contains a cycle")
 
 
 class TaskRecord(BaseModel):

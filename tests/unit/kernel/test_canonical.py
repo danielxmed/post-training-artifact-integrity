@@ -1,3 +1,4 @@
+import json
 import math
 
 import pytest
@@ -28,6 +29,21 @@ def test_non_finite_floats_rejected(value: float) -> None:
 def test_non_string_keys_rejected() -> None:
     with pytest.raises(CanonicalizationError):
         canonical_json_bytes({1: "a"})
+
+
+def test_unpaired_surrogates_rejected_with_typed_error() -> None:
+    # json.loads('"\\ud800"') is legal JSON and yields a lone surrogate that
+    # cannot be UTF-8 encoded; the choke point must reject it as a typed
+    # CanonicalizationError, never crash with UnicodeEncodeError.
+    lone_surrogate = json.loads('"\\ud800"')
+    with pytest.raises(CanonicalizationError, match="surrogate"):
+        canonical_json_bytes({"x": lone_surrogate})
+    with pytest.raises(CanonicalizationError, match="surrogate"):
+        canonical_json_bytes(lone_surrogate)
+    with pytest.raises(CanonicalizationError, match="surrogate"):
+        canonical_json_bytes({lone_surrogate: 1})
+    # paired surrogates decode to a real character and are fine
+    assert canonical_json_bytes(json.loads('"\\ud83d\\ude00"')) == '"😀"'.encode()
 
 
 @pytest.mark.parametrize("value", [(1, 2), {1, 2}, object(), b"bytes"])

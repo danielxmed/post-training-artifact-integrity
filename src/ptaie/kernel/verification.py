@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from ptaie.kernel.canonical import JsonValue
 from ptaie.kernel.claims import SealedClaimBundle
+from ptaie.kernel.contract import HiddenBaseModel
 from ptaie.kernel.rewards import ConstraintVector, OutcomeClass, RewardVector
 from ptaie.kernel.store.workspace import WorkspaceReadView
 from ptaie.kernel.task import TaskHidden
@@ -42,7 +43,12 @@ class CheckStatus(StrEnum):
 
 
 class VerifierResult(BaseModel):
-    """The outcome of one check within one layer."""
+    """The outcome of one check within one layer.
+
+    Dual-use (visible validators and hidden verifiers both emit it), so it
+    keeps a plain repr — hidden-layer results must only be rendered through
+    the enclosing, redacted :class:`VerificationReport`.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -59,24 +65,20 @@ class VerifierResult(BaseModel):
         return self
 
 
-class ClaimAssessment(BaseModel):
+class ClaimAssessment(HiddenBaseModel):
     """Whether the audit events a claim cites actually evidence the claim."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
 
     claim_id: str
     supported: bool
     reason: str
 
 
-class VerificationReport(BaseModel):
+class VerificationReport(HiddenBaseModel):
     """The complete hidden-verification outcome for one sealed claim bundle.
 
-    Environment-side only: the agent observes the terminal code, never this
-    report.
+    Environment-side only (hence the redacted repr): the agent observes the
+    terminal code, never this report.
     """
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
 
     sealed_bundle_hash: str
     results: tuple[VerifierResult, ...]

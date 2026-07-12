@@ -31,10 +31,12 @@ def validate_workspace_path(path: str) -> str:
         raise PathViolationError(f"invalid path (backslash): {path!r}")
     if path.startswith("/"):
         raise PathViolationError(f"invalid path (absolute): {path!r}")
-    if len(path) >= 2 and path[1] == ":":
-        raise PathViolationError(f"invalid path (drive letter): {path!r}")
-    if any(ord(ch) < 0x20 for ch in path):
-        raise PathViolationError("invalid path (control characters)")
+    if ":" in path:
+        # Subsumes drive letters and kills ADS/drive-relative forms anywhere.
+        raise PathViolationError(f"invalid path (colon): {path!r}")
+    if any(not ch.isprintable() for ch in path):
+        # Rejects C0/C1 controls, DEL, bidi overrides, zero-width characters.
+        raise PathViolationError("invalid path (non-printable or format characters)")
     segments = path.split("/")
     for segment in segments:
         if segment in ("", ".", ".."):
@@ -128,9 +130,13 @@ class Manifest(BaseModel):
         return Manifest(entries=tuple(entry for entry in self.entries if entry.path != path))
 
     def diff(self, other: "Manifest") -> ManifestDiff:
-        """Diff from ``self`` to ``other``."""
-        mine = {entry.path: entry.blob for entry in self.entries}
-        theirs = {entry.path: entry.blob for entry in other.entries}
+        """Diff from ``self`` to ``other``.
+
+        Compares the full entry identity the manifest hash covers, so
+        ``diff(a, b).is_empty`` iff ``a.manifest_hash == b.manifest_hash``.
+        """
+        mine = {entry.path: (entry.blob, entry.media_type) for entry in self.entries}
+        theirs = {entry.path: (entry.blob, entry.media_type) for entry in other.entries}
         added = tuple(sorted(path for path in theirs if path not in mine))
         removed = tuple(sorted(path for path in mine if path not in theirs))
         changed = tuple(

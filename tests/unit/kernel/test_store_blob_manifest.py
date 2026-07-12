@@ -45,6 +45,8 @@ def test_valid_workspace_paths(path: str) -> None:
         "a\\b",
         "C:/windows",
         "c:sneaky",
+        "x/C:/y",
+        "file.txt:stream",
         "../escape",
         "a/../b",
         "a//b",
@@ -52,6 +54,10 @@ def test_valid_workspace_paths(path: str) -> None:
         ".",
         "..",
         "a/\x00b",
+        "a/\x7fb",
+        "a/\x85b",
+        "a/‮b",
+        "a/​b",
     ],
 )
 def test_invalid_workspace_paths(path: str) -> None:
@@ -98,6 +104,18 @@ def test_without_absent_path_raises() -> None:
     manifest = Manifest(entries=(_entry("a.txt", b"a"),))
     with pytest.raises(ManifestError):
         manifest.without("missing.txt")
+
+
+def test_diff_agrees_with_manifest_hash_on_media_type_changes() -> None:
+    blob = sha256_hex(b"same-bytes")
+    plain = Manifest(entries=(ManifestEntry(path="a.txt", blob=blob, media_type="text/plain"),))
+    json_typed = Manifest(
+        entries=(ManifestEntry(path="a.txt", blob=blob, media_type="application/json"),)
+    )
+    assert plain.manifest_hash != json_typed.manifest_hash
+    diff = plain.diff(json_typed)
+    assert diff.changed == ("a.txt",)
+    assert not diff.is_empty  # diff emptiness must track manifest identity
 
 
 def test_diff() -> None:

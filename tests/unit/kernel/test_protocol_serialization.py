@@ -75,6 +75,21 @@ def test_unknown_action_kind_rejected() -> None:
         _ACTION_ADAPTER.validate_python({"kind": "shell", "command": "rm -rf /"})
 
 
+def test_wire_rejects_non_finite_floats() -> None:
+    """A wire-valid value must always be canonicalizable: NaN/Infinity are
+    rejected at validation time, matching the canonical hashing contract."""
+    with pytest.raises(ValidationError):
+        ToolAction.model_validate(
+            {"kind": "tool", "tool_name": "x", "arguments": {"v": float("nan")}}
+        )
+    with pytest.raises(ValidationError):
+        ToolAction.model_validate(
+            {"kind": "tool", "tool_name": "x", "arguments": {"v": float("inf")}}
+        )
+    with pytest.raises(ValidationError):
+        ToolAction.model_validate_json('{"kind":"tool","tool_name":"x","arguments":{"v":Infinity}}')
+
+
 def test_action_trace_roundtrip() -> None:
     trace = ActionTrace(
         env_version="0.1.0",

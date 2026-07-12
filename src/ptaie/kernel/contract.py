@@ -5,7 +5,8 @@ Everything in this module is hidden-side state. ``HiddenBaseModel`` redacts
 observation, an error message, or a log line through string formatting.
 """
 
-from typing import Literal, Self
+from collections.abc import Iterable
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -13,19 +14,25 @@ from ptaie.kernel.canonical import JsonValue
 
 
 class HiddenBaseModel(BaseModel):
-    """Base for hidden-side models: frozen, forbid-extra, redacted repr/str.
+    """Base for hidden-side models: frozen, forbid-extra, redacted rendering.
 
     ``model_dump`` still exposes values — redaction guards accidental string
     interpolation, not deliberate serialization by environment code.
+    ``hide_input_in_errors`` keeps pydantic ``ValidationError`` messages from
+    echoing hidden field values; the empty ``__repr_args__`` starves
+    rich/devtools formatters (``__rich_repr__``, ``__pretty__``) of values.
     """
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(<redacted>)"
 
     def __str__(self) -> str:
         return f"{type(self).__name__}(<redacted>)"
+
+    def __repr_args__(self) -> Iterable[tuple[str | None, Any]]:
+        return ()
 
 
 class Requirement(HiddenBaseModel):
