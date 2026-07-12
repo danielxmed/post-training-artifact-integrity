@@ -49,8 +49,13 @@ select = [
     "S",   # bandit
 ]
 
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"ptaie.adapters".msg = "Only trainer-side code and tests may import adapters; kernel/plugins/policies must not."
+
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]
+"tests/**" = ["S101", "TID251", "SLF001"]
+# Deterministic seeded RNG is the point of this module, not a crypto weakness:
+"src/ptaie/kernel/rng.py" = ["S311"]
 
 [tool.mypy]
 strict = true
