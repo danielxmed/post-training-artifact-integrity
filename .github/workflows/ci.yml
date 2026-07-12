@@ -50,3 +50,35 @@ jobs:
           --cov=ptaie.kernel --cov-report=term --cov-fail-under=85
         env:
           HYPOTHESIS_PROFILE: ci
+
+  replay-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run pytest -m "replay or acceptance"
+        env:
+          HYPOTHESIS_PROFILE: ci
+
+  determinism:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      # Two runs under DIFFERENT PYTHONHASHSEED values must be byte-identical:
+      # this catches dict/set-iteration-order dependence that an identical
+      # double-run would never surface.
+      - run: PYTHONHASHSEED=0 uv run python scripts/determinism_check.py --seeds 0:150 --out run_a.json
+      - run: PYTHONHASHSEED=524287 uv run python scripts/determinism_check.py --seeds 0:150 --out run_b.json
+      - run: diff run_a.json run_b.json
+      - run: uv run pytest -m replay
+        env:
+          HYPOTHESIS_PROFILE: ci

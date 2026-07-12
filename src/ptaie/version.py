@@ -9,4 +9,4 @@ were produced under, and replaying a trace under a different version is a hard
 error, never a silent best-effort.
 """
 
-ENV_VERSION = "0.1.0"
+ENV_VERSION = "0.1.1"

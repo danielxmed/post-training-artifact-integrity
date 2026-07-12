@@ -74,6 +74,18 @@ def test_kernel_never_imports_adapters_plugins_or_policies() -> None:
                 assert not module.startswith(forbidden), f"{path.name} imports {module}"
 
 
+def test_nothing_but_adapters_imports_adapters() -> None:
+    """Scalarization must not leak into the environment: kernel, plugins, and
+    policies may never import ``ptaie.adapters``."""
+    for subpackage in ("kernel", "plugins", "policies"):
+        subdir = PACKAGE_DIR / subpackage
+        for path in sorted(subdir.rglob("*.py")):
+            for module in _imported_modules(path):
+                assert not module.startswith("ptaie.adapters"), (
+                    f"{path.relative_to(PACKAGE_DIR)} imports {module}"
+                )
+
+
 def test_relative_import_resolution_is_correct() -> None:
     """Self-test of the wall's resolver so a refactor can't silently gut it."""
     source = "from . import blob\nfrom .. import canonical\nfrom ..rng import DerivedRng\n"

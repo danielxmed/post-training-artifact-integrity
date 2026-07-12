@@ -16,6 +16,7 @@ from ptaie.kernel.observation import Observation
 from ptaie.kernel.plugin import PluginRegistry
 from ptaie.kernel.rewards import ConstraintVector, RewardVector, TerminalCode
 from ptaie.kernel.verification import Finalizer
+from ptaie.version import ENV_VERSION
 
 
 class Policy(Protocol):
@@ -92,6 +93,8 @@ class ReplayHarness:
         return trace, outcome
 
     def replay(self, trace: ActionTrace) -> ReplayResult:
+        if trace.env_version != ENV_VERSION:
+            raise ReplayMismatchError("env_version", ENV_VERSION, trace.env_version)
         env = PtaieEnv(self._plugins, self._finalizer)
         env.reset(
             task_seed=trace.task_seed,

@@ -9,12 +9,26 @@ and asymmetric commit risk.
 The scientific object is the agent's *decision discipline* — what to inspect,
 whether to edit, ask, abstain, or commit — not raw repair throughput.
 
-**Status: pre-alpha.** Milestone 1 (a vertical slice: the Artifact Integrity Kernel
-plus the SFT chat dataset artifact class, end to end) is under construction.
+**Status: pre-alpha.** Milestone 1 — a vertical slice: the domain-agnostic
+Artifact Integrity Kernel plus the SFT chat dataset artifact class, end to end
+(six corruption operators, hidden layered verifiers, equivalence-class
+acceptance, evidence-locked commit, deterministic replay, and scripted
+oracle/baseline policies).
 
 - Founding research/architecture report: [`docs/NORTH_STAR.md`](docs/NORTH_STAR.md)
+- Architecture overview: [`docs/architecture.md`](docs/architecture.md)
+- Determinism contract: [`docs/determinism.md`](docs/determinism.md)
+- Task format: [`docs/task-format.md`](docs/task-format.md)
 - Contributor guide: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - Developer/agent guidance and binding design invariants: [`CLAUDE.md`](CLAUDE.md) / [`AGENTS.md`](AGENTS.md)
+
+## Quickstart
+
+Generate a task, run the reference oracle policy, and print the reward/constraint record:
+
+```bash
+uv run python scripts/quickstart.py 0
+```
 
 ## Development
 

@@ -83,3 +83,20 @@ def test_env_version_mismatch_changes_result() -> None:
     )
     # different env_version => different episode identity (audit hash differs)
     assert a.audit_head_hash != b.audit_head_hash
+
+
+def test_replay_rejects_a_cross_version_trace() -> None:
+    import pytest as _pytest
+
+    from ptaie.kernel.actions import ActionTrace, ToolAction
+    from ptaie.kernel.errors import ReplayMismatchError
+
+    harness = _harness()
+    stale = ActionTrace(
+        env_version="0.0.0-old",
+        task_seed=1,
+        artifact_class="sft_chat",
+        actions=(ToolAction(tool_name="kernel.list_files"),),
+    )
+    with _pytest.raises(ReplayMismatchError):
+        harness.replay(stale)

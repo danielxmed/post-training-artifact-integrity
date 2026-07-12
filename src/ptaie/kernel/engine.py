@@ -202,6 +202,9 @@ class EpisodeEngine:
                 "tool": action.tool_name,
                 "status": outcome.status,
                 "staged_root": self._workspace.staged,
+                # the inspected path (when the tool takes one), so evidence
+                # assessment can tell an artifact inspection from a listing
+                "target": _target_path(action),
             },
             step_index=self._step_index,
         )
@@ -434,6 +437,11 @@ class PtaieEnv:
 
 def _episode_id(task_seed: int, env_version: str) -> str:
     return "ep-" + derive_seed(task_seed, "episode-id", env_version).to_bytes(8, "big").hex()
+
+
+def _target_path(action: ToolAction) -> str | None:
+    path = action.arguments.get("path")
+    return path if isinstance(path, str) else None
 
 
 def _action_payload(action: Action) -> dict[str, JsonValue]:

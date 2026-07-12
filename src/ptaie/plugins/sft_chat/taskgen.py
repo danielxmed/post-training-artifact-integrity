@@ -114,14 +114,19 @@ def _card_bytes(data_bytes: bytes, declared: dict[str, str], notes: tuple[str, .
     return serialize_card(card)
 
 
-# Benign provenance notes attached to a fraction of non-inconsistent tasks so
-# that a non-empty ``notes`` array does not by itself identify the inconsistent
-# state. They must not contradict any declared dimension.
+# Benign notes attached to a fraction of non-inconsistent tasks so that a
+# non-empty ``notes`` array — and even a policy-imperative note *shape* — does
+# not by itself identify the inconsistent state; only a note's semantic
+# contradiction with a declared dimension does. None of these contradict any
+# declared dimension (role_alternation / system_policy / mask_convention).
 _BENIGN_NOTES = (
     "Records were shuffled with a fixed seed.",
     "Token counts in this card are approximate.",
     "Exported from the canonical training store.",
     "Line ordering is not semantically meaningful.",
+    "Assistant replies should be concise and on-topic.",
+    "Records must be reviewed for quality before training.",
+    "Conversations should stay within the documented domain.",
 )
 
 
