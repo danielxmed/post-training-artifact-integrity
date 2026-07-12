@@ -45,4 +45,8 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --frozen
-      - run: uv run pytest -m "not replay and not acceptance and not slow"
+      - run: >
+          uv run pytest -m "not replay and not acceptance and not slow"
+          --cov=ptaie.kernel --cov-report=term --cov-fail-under=85
+        env:
+          HYPOTHESIS_PROFILE: ci
